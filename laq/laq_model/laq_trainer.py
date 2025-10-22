@@ -18,7 +18,7 @@ from laq_model.optimizer import get_optimizer
 from ema_pytorch import EMA
 
 
-from laq_model.data import ImageVideoDataset
+from laq_model.data import ImageVideoDataset, ImageVideoDatasetSubtask
 
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
@@ -55,7 +55,8 @@ class LAQTrainer(nn.Module):
         *,
         num_train_steps,
         batch_size,
-        folder,
+        folder_train,
+        folder_val,
         traj_info=None,
         train_on_images = False,
         lr = 3e-4,
@@ -65,13 +66,14 @@ class LAQTrainer(nn.Module):
         discr_max_grad_norm = None,
         save_results_every = 50,
         save_model_every = 9998,
-        results_folder = './results',
+        results_folder = 'minigrid_example/results',
         use_ema = True,
         ema_update_after_step = 0,
         ema_update_every = 1,
         accelerate_kwargs: dict = dict(),
         weights = None,
         offsets = None,
+        subtask=False
     ):
         super().__init__()
         image_size = vae.image_size
@@ -116,9 +118,13 @@ class LAQTrainer(nn.Module):
         
         
         # sthv2 training
-        self.ds = ImageVideoDataset(folder, image_size, offset=offsets)
+        if subtask:
+            self.ds = ImageVideoDatasetSubtask(folder_train, image_size, offset=offsets)
+            self.valid_ds = ImageVideoDatasetSubtask(folder_val, image_size, offset=offsets)
 
-        self.valid_ds = self.ds
+        else:
+            self.ds = ImageVideoDataset(folder_train, image_size, offset=offsets)
+            self.valid_ds = ImageVideoDataset(folder_val, image_size, offset=offsets)
 
 
         self.dl = DataLoader(
@@ -330,7 +336,7 @@ class LAQTrainer(nn.Module):
     def train(self, log_fn = noop):
         device = next(self.vae.parameters()).device
         if self.accelerator.is_main_process:
-            wandb.init(project='phenaki_cnn',name=self.results_folder_str.split('/')[-1], config={
+            wandb.init(project='latent_action_laq',name=self.results_folder_str.split('/')[-1], config={
                 "learning_rate": self.lr,
                 "batch_size": self.batch_size,
                 "num_train_steps": self.num_train_steps,
@@ -342,4 +348,44 @@ class LAQTrainer(nn.Module):
 
         self.print('training complete')
         if self.accelerator.is_main_process:
-            wandb.finish()  
+            wandb.finish() 
+
+
+    def recon_every_code(self, filename='recon_every_code'):
+
+        model = self.vae
+        device = self.device
+        logs = {}
+        self.vae.eval()
+
+        valid_data = next(self.valid_dl_iter)
+
+
+        valid_data = valid_data.to(device)
+
+        recons = model.inference_tokens(valid_data)
+
+
+        for i,r in enumerate(recons):
+            if self.train_on_images:
+                imgs_and_recons = torch.stack((valid_data, r), dim = 0)
+                # imgs_and_recons = torch.stack((valid_data, recons), dim = 0)
+                imgs_and_recons = rearrange(imgs_and_recons, 'r b ... -> (b r) ...')
+
+                imgs_and_recons = imgs_and_recons.detach().cpu().float().clamp(0., 1.)
+                grid = make_grid(imgs_and_recons, nrow = 2, normalize = True, value_range = (0, 1))
+
+                logs['reconstructions'] = grid
+                save_image(grid, str(self.results_folder / f'{filename}.png'))
+            else:
+                # imgs_and_recons = torch.stack((valid_data[:,:,0],valid_data[:,:,-1], recons, recons+valid_data[:,:,0]), dim = 0)
+                imgs_and_recons = torch.stack((valid_data[:,:,0],valid_data[:,:,-1], r), dim = 0)
+                # imgs_and_recons = torch.stack((valid_data, recons), dim = 0)
+                imgs_and_recons = rearrange(imgs_and_recons, 'r b ... -> (b r) ...')
+
+                imgs_and_recons = imgs_and_recons.detach().cpu().float().clamp(0., 1.)
+                grid = make_grid(imgs_and_recons, nrow = 3, normalize = True, value_range = (0, 1))
+
+                logs['reconstructions'] = grid
+
+                save_image(grid, str(self.results_folder / f'{filename}_{i}.png'))

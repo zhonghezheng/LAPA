@@ -1,0 +1,2 @@
+from laq_model import LAQTrainer
+from laq_model import LatentActionQuantization
