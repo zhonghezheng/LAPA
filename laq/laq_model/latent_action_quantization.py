@@ -385,7 +385,7 @@ class LatentActionQuantization(nn.Module):
         shape = tokens.shape
         *_, h, w, _ = shape
 
-        first_tokens, last_tokens = self.encode(tokens)
+        first_tokens, last_tokens = self.encode(tokens) #st transformer encode
 
         # quantize
         first_tokens, first_packed_fhw_shape = pack([first_tokens], 'b * d')
@@ -396,11 +396,10 @@ class LatentActionQuantization(nn.Module):
         else:
             tokens, indices = self.vq.inference(first_tokens, last_tokens)
 
-
-
         ret = []
         for code in self.vq.codebooks:
-            tokens = code.repeat(10, 4, 32)
+            # print(code)
+            tokens = code.repeat(10, 1, 32) #should be (batch size, 1, patch_size)
             if return_only_codebook_ids:
                 return indices
 
@@ -413,7 +412,6 @@ class LatentActionQuantization(nn.Module):
             else:
                 print("code_seq_len should be square number or defined as 2")
                 return
-            print(tokens.shape)
 
             tokens = rearrange(tokens, 'b (t h w) d -> b t h w d', h = action_h, w = action_w)
             concat_tokens = first_frame_tokens #.detach() #+ tokens

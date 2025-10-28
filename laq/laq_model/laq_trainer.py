@@ -379,12 +379,12 @@ class LAQTrainer(nn.Module):
                 save_image(grid, str(self.results_folder / f'{filename}.png'))
             else:
                 # imgs_and_recons = torch.stack((valid_data[:,:,0],valid_data[:,:,-1], recons, recons+valid_data[:,:,0]), dim = 0)
-                imgs_and_recons = torch.stack((valid_data[:,:,0],valid_data[:,:,-1], r), dim = 0)
+                imgs_and_recons = torch.stack((valid_data[:,:,0], r), dim = 0)
                 # imgs_and_recons = torch.stack((valid_data, recons), dim = 0)
                 imgs_and_recons = rearrange(imgs_and_recons, 'r b ... -> (b r) ...')
 
                 imgs_and_recons = imgs_and_recons.detach().cpu().float().clamp(0., 1.)
-                grid = make_grid(imgs_and_recons, nrow = 3, normalize = True, value_range = (0, 1))
+                grid = make_grid(imgs_and_recons, nrow = 2, normalize = True, value_range = (0, 1))
 
                 logs['reconstructions'] = grid
 

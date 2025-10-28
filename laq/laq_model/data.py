@@ -62,8 +62,11 @@ class ImageVideoDataset(Dataset):
             first_frame_idx = min(first_frame_idx, len(img_list)-1)
             second_frame_idx = min(first_frame_idx + offset, len(img_list)-1)
             
-            first_path = os.path.join(self.folder, folder, img_list[first_frame_idx])
-            second_path = os.path.join(self.folder, folder, img_list[second_frame_idx])
+            # first_path = os.path.join(self.folder, folder, img_list[first_frame_idx])
+            # second_path = os.path.join(self.folder, folder, img_list[second_frame_idx])
+
+            first_path = os.path.join(self.folder, folder, f"frame{first_frame_idx}.jpg")
+            second_path = os.path.join(self.folder, folder, f"frame{second_frame_idx}.jpg")
                     
             img = Image.open(first_path)
             next_img = Image.open(second_path)
@@ -114,7 +117,7 @@ class ImageVideoDatasetSubtask(Dataset):
             img_list = os.listdir(os.path.join(self.folder, folder))
 
             ## pick random frame 
-            first_frame_idx = random.choice([0,5,10,15,20])
+            first_frame_idx = random.choice([0,4,16])
             # first_frame_idx = min(first_frame_idx, len(img_list)-1)
             second_frame_idx = min(first_frame_idx + offset, len(img_list)-1)
             

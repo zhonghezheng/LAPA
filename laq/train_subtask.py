@@ -6,12 +6,12 @@ laq = LatentActionQuantization(
     quant_dim=32,
     codebook_size = 8,
     image_size = 256,
-    patch_size = 32,
-    spatial_depth = 4, #8
-    temporal_depth = 5, #8
+    patch_size = 32, #no spatial patches, learn action for the whole image
+    spatial_depth = 8, #8
+    temporal_depth = 8, #8
     dim_head = 64,
     heads = 16,
-    code_seq_len=4,
+    code_seq_len=1,
 ).cuda()
 
 trainer = LAQTrainer(
@@ -23,11 +23,11 @@ trainer = LAQTrainer(
     grad_accum_every = 1,
     train_on_images = False, 
     use_ema = False,          
-    num_train_steps = 10001,
-    results_folder='minigrid_example/results/high_level',
+    num_train_steps = 100001,
+    results_folder='minigrid_example/results/high_level_step_4_100k',
     lr=1e-4,
-    save_model_every=1000,
-    save_results_every=1000,
+    save_model_every=10000,
+    save_results_every=10000,
     subtask=True
 )
 
