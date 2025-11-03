@@ -2,6 +2,7 @@
 ## NSVQ: Noise Substitution in Vector Quantization for Machine Learning in IEEE Access journal, January 2022
 
 import torch
+import torch.nn.functional as F
 import torch.distributions.normal as normal_dist
 import torch.distributions.uniform as uniform_dist
 
@@ -222,11 +223,18 @@ class NSVQ(torch.nn.Module):
                     used_codebooks = used
 
                 self.codebooks[unused_indices] *= 0
-                self.codebooks[unused_indices] += used_codebooks[range(unused_count)] + self.eps * torch.randn(
+                self.codebooks[unused_indices] += used_codebooks[range(unused_count)] + 0.01*torch.randn(
                     (unused_count, self.embedding_dim), device=self.device).clone()
 
             print(f'************* Replaced ' + str(unused_count) + f' codebooks *************')
             self.codebooks_used[:] = 0.0    
+
+            # replace identical codebooks with random noise vectors
+            # for i in range(len(self.codebooks)):
+            #     for j in range(i+1, len(self.codebooks)):
+            #         if F.mse_loss(self.codebooks[i], self.codebooks[j]).detach() < 0.1:
+            #             print(f'Warning: identical codebooks found at indices {i} and {j}')
+            #             self.codebooks[j] = torch.randn((self.embedding_dim,), device=self.device).clone()
 
     def inference(self, input_data_first, input_data_last, user_action_token_num=None):
 

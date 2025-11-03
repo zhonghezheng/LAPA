@@ -18,7 +18,7 @@ from laq_model.optimizer import get_optimizer
 from ema_pytorch import EMA
 
 
-from laq_model.data import ImageVideoDataset, ImageVideoDatasetSubtask
+from laq_model.data import ImageVideoDataset, ImageVideoDatasetSubtask, ImageVideoDatasetSubtaskLong
 
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
@@ -73,7 +73,9 @@ class LAQTrainer(nn.Module):
         accelerate_kwargs: dict = dict(),
         weights = None,
         offsets = None,
-        subtask=False
+        subtask=False,
+        long = False,
+        act=None
     ):
         super().__init__()
         image_size = vae.image_size
@@ -118,9 +120,17 @@ class LAQTrainer(nn.Module):
         
         
         # sthv2 training
-        if subtask:
+        if subtask and not long:
             self.ds = ImageVideoDatasetSubtask(folder_train, image_size, offset=offsets)
             self.valid_ds = ImageVideoDatasetSubtask(folder_val, image_size, offset=offsets)
+
+        elif long:
+            self.ds = ImageVideoDatasetSubtaskLong(folder_train, image_size, offset=offsets)
+            self.valid_ds = ImageVideoDatasetSubtaskLong(folder_val, image_size, offset=offsets)
+        
+        elif act is not None:
+            self.ds = ImageVideoDataset(folder_train+f'/{act}', image_size, offset=offsets)
+            self.valid_ds = ImageVideoDataset(folder_val+f'/{act}', image_size, offset=offsets)
 
         else:
             self.ds = ImageVideoDataset(folder_train, image_size, offset=offsets)
@@ -135,7 +145,7 @@ class LAQTrainer(nn.Module):
             pin_memory=True,  # Helps with faster data transfer to GPU
             prefetch_factor=2,
             )
-
+        
         self.valid_dl = DataLoader(
             self.valid_ds,
             batch_size = batch_size,
@@ -265,7 +275,7 @@ class LAQTrainer(nn.Module):
         self.optim.step()
         self.optim.zero_grad()
 
-        if self.is_main:  # Ensure only the main process logs in a distributed setting
+        if self.is_main and (steps % self.save_results_every):  # Ensure only the main process logs in a distributed setting
             wandb.log(logs)
 
         if self.is_main and self.use_ema:
@@ -287,7 +297,8 @@ class LAQTrainer(nn.Module):
                 valid_data = valid_data.to(device)
 
                 recons = model(valid_data, return_recons_only = True)
-
+                accum_log(logs, {'val_loss': nn.MSELoss()(recons, valid_data[:,:,-1]).item()})
+                wandb.log(logs)
 
                 if self.train_on_images:
                     imgs_and_recons = torch.stack((valid_data, recons), dim = 0)
@@ -350,6 +361,23 @@ class LAQTrainer(nn.Module):
         if self.accelerator.is_main_process:
             wandb.finish() 
 
+    def code_quantization_check(self):
+
+        model = self.vae
+        device = self.device
+        logs = {}
+        self.vae.eval()
+
+        valid_data = next(self.valid_dl_iter)
+        valid_data = valid_data.to(device)
+
+        tokens, indicies = model.inference_tokens(valid_data)
+
+        print('indicies: ', indicies.detach().clone().tolist())
+
+        # for code in self.vae.vq.codebooks:
+        #     print(code)
+
 
     def recon_every_code(self, filename='recon_every_code'):
 
@@ -359,12 +387,9 @@ class LAQTrainer(nn.Module):
         self.vae.eval()
 
         valid_data = next(self.valid_dl_iter)
-
-
         valid_data = valid_data.to(device)
 
-        recons = model.inference_tokens(valid_data)
-
+        recons = model.apply_tokens(valid_data)
 
         for i,r in enumerate(recons):
             if self.train_on_images:
@@ -388,4 +413,4 @@ class LAQTrainer(nn.Module):
 
                 logs['reconstructions'] = grid
 
-                save_image(grid, str(self.results_folder / f'{filename}_{i}.png'))
+                save_image(grid, str(self.results_folder / f'{filename}_code{i}.png'))

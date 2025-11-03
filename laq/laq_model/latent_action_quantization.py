@@ -240,7 +240,7 @@ class LatentActionQuantization(nn.Module):
         vq_kwargs = dict(mask = vq_mask) if not self.lookup_free_quantization else dict()
 
         
-        tokens, perplexity, codebook_usage, indices = self.vq(first_tokens, last_tokens, codebook_training_only = False) #ST output quantized tokens
+        tokens, perplexity, codebook_usage, indices = self.vq(first_tokens, last_tokens, codebook_training_only = True) #ST output quantized tokens
         
         num_unique_indices = indices.unique().size(0)
         
@@ -327,8 +327,6 @@ class LatentActionQuantization(nn.Module):
             tokens, indices = self.vq.inference(first_tokens, last_tokens, user_action_token_num=user_action_token_num)
         else:
             tokens, indices = self.vq.inference(first_tokens, last_tokens)
-
-        
     
         if return_only_codebook_ids:
             return indices
@@ -392,33 +390,74 @@ class LatentActionQuantization(nn.Module):
         last_tokens, last_packed_fhw_shape = pack([last_tokens], 'b * d')
 
         if user_action_token_num is not None:
-            tokens, indices = self.vq.inference(first_tokens, last_tokens, user_action_token_num=user_action_token_num) # user_action_token_num is used in from VLM I think
+            tokens, indices = self.vq.inference(first_tokens, last_tokens, user_action_token_num=user_action_token_num) 
         else:
             tokens, indices = self.vq.inference(first_tokens, last_tokens)
+        
+        return tokens, indices
+    
+
+    def apply_tokens(
+        self,
+        video,
+        step = 0,
+        mask = None,
+    ):
+        
+        assert video.ndim in {4, 5}
+
+        is_image = video.ndim == 4
+
+        if is_image:
+            video = rearrange(video, 'b c h w -> b c 1 h w')
+            assert not exists(mask)
+
+        b, c, f, *image_dims, device = *video.shape, video.device
+
+        assert tuple(image_dims) == self.image_size
+        assert not exists(mask) or mask.shape[-1] == f
+
+        first_frame, rest_frames = video[:, :, :1], video[:, :, 1:]
+
+        first_frame_tokens = self.to_patch_emb_first_frame(first_frame)
+        # rest_frames_tokens = self.to_patch_emb_first_frame(rest_frames)
+        # tokens = torch.cat((first_frame_tokens, rest_frames_tokens), dim = 1)
+
+
+        # shape = tokens.shape
+        # *_, h, w, _ = shape
+
+        # first_tokens, last_tokens = self.encode(tokens) #st transformer encode
+
+        # # quantize
+        # first_tokens, first_packed_fhw_shape = pack([first_tokens], 'b * d')
+        # last_tokens, last_packed_fhw_shape = pack([last_tokens], 'b * d')
+
+        # tokens, indices = self.vq.inference(first_tokens, last_tokens)
 
         ret = []
-        for code in self.vq.codebooks:
-            # print(code)
-            tokens = code.repeat(10, 1, 32) #should be (batch size, 1, patch_size)
-            if return_only_codebook_ids:
-                return indices
+        with torch.no_grad():
+            for code in self.vq.codebooks:
+                # print(code)
+                # tokens = code.repeat(b, 1, 32) #should be (batch size, 1, patch_size)
+                code = code.repeat(b, 1)
+                tokens = self.vq.decode(code, b)
+                print(tokens)
 
-            if math.sqrt(self.code_seq_len) % 1 == 0: # "code_seq_len should be square number"
-                action_h = int(math.sqrt(self.code_seq_len))
-                action_w = int(math.sqrt(self.code_seq_len))
-            elif self.code_seq_len == 2:
-                action_h = 2
-                action_w = 1
-            else:
-                print("code_seq_len should be square number or defined as 2")
-                return
+                if math.sqrt(self.code_seq_len) % 1 == 0: # "code_seq_len should be square number"
+                    action_h = int(math.sqrt(self.code_seq_len))
+                    action_w = int(math.sqrt(self.code_seq_len))
+                elif self.code_seq_len == 2:
+                    action_h = 2
+                    action_w = 1
+                else:
+                    print("code_seq_len should be square number or defined as 2")
+                    return
 
-            tokens = rearrange(tokens, 'b (t h w) d -> b t h w d', h = action_h, w = action_w)
-            concat_tokens = first_frame_tokens #.detach() #+ tokens
-            recon_video = self.decode(concat_tokens, actions=tokens)
-            returned_recon = rearrange(recon_video, 'b c 1 h w -> b c h w')
-            ret.append(returned_recon)
-        # video = rest_frames 
-        
+                tokens = rearrange(tokens, 'b (t h w) d -> b t h w d', h = action_h, w = action_w)
+                concat_tokens = first_frame_tokens #.detach() #+ tokens
+                recon_video = self.decode(concat_tokens, actions=tokens.detach().clone())
+                returned_recon = rearrange(recon_video, 'b c 1 h w -> b c h w')
+                ret.append(returned_recon.detach().clone())
+
         return ret
-
