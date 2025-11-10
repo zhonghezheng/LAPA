@@ -18,7 +18,7 @@ from laq_model.optimizer import get_optimizer
 from ema_pytorch import EMA
 
 
-from laq_model.data import ImageVideoDataset, ImageVideoDatasetSubtask, ImageVideoDatasetSubtaskLong
+from laq_model.data import ImageVideoDatasetColor
 
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
@@ -73,8 +73,6 @@ class LAQTrainer(nn.Module):
         accelerate_kwargs: dict = dict(),
         weights = None,
         offsets = None,
-        subtask=False,
-        long = False,
         act=None
     ):
         super().__init__()
@@ -117,24 +115,16 @@ class LAQTrainer(nn.Module):
 
         # create dataset
         self.train_on_images = train_on_images
-        
+        self.act = act
         
         # sthv2 training
-        if subtask and not long:
-            self.ds = ImageVideoDatasetSubtask(folder_train, image_size, offset=offsets)
-            self.valid_ds = ImageVideoDatasetSubtask(folder_val, image_size, offset=offsets)
-
-        elif long:
-            self.ds = ImageVideoDatasetSubtaskLong(folder_train, image_size, offset=offsets)
-            self.valid_ds = ImageVideoDatasetSubtaskLong(folder_val, image_size, offset=offsets)
-        
-        elif act is not None:
-            self.ds = ImageVideoDataset(folder_train+f'/{act}', image_size, offset=offsets)
-            self.valid_ds = ImageVideoDataset(folder_val+f'/{act}', image_size, offset=offsets)
+        if act is not None:
+            self.ds = ImageVideoDatasetColor(folder_train+f'/{act}', image_size, offset=offsets)
+            self.valid_ds = ImageVideoDatasetColor(folder_val+f'/{act}', image_size, offset=offsets)
 
         else:
-            self.ds = ImageVideoDataset(folder_train, image_size, offset=offsets)
-            self.valid_ds = ImageVideoDataset(folder_val, image_size, offset=offsets)
+            self.ds = ImageVideoDatasetColor(folder_train, image_size, offset=offsets)
+            self.valid_ds = ImageVideoDatasetColor(folder_val, image_size, offset=offsets)
 
 
         self.dl = DataLoader(
@@ -148,7 +138,7 @@ class LAQTrainer(nn.Module):
         
         self.valid_dl = DataLoader(
             self.valid_ds,
-            batch_size = batch_size,
+            batch_size = 10,
             num_workers = 4)
 
         if exists(self.vae.discr):
@@ -373,7 +363,7 @@ class LAQTrainer(nn.Module):
 
         tokens, indicies = model.inference_tokens(valid_data)
 
-        print('indicies: ', indicies.detach().clone().tolist())
+        print(f'indicies for {self.act}: \t', indicies.detach().clone().tolist())
 
         # for code in self.vae.vq.codebooks:
         #     print(code)

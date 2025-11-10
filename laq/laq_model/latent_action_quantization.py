@@ -240,7 +240,7 @@ class LatentActionQuantization(nn.Module):
         vq_kwargs = dict(mask = vq_mask) if not self.lookup_free_quantization else dict()
 
         
-        tokens, perplexity, codebook_usage, indices = self.vq(first_tokens, last_tokens, codebook_training_only = True) #ST output quantized tokens
+        tokens, perplexity, codebook_usage, indices = self.vq(first_tokens, last_tokens, codebook_training_only = False) #ST output quantized tokens
         
         num_unique_indices = indices.unique().size(0)
         
@@ -440,10 +440,10 @@ class LatentActionQuantization(nn.Module):
             for code in self.vq.codebooks:
                 # print(code)
                 # tokens = code.repeat(b, 1, 32) #should be (batch size, 1, patch_size)
+                print(code)
                 code = code.repeat(b, 1)
                 tokens = self.vq.decode(code, b)
-                print(tokens)
-
+                
                 if math.sqrt(self.code_seq_len) % 1 == 0: # "code_seq_len should be square number"
                     action_h = int(math.sqrt(self.code_seq_len))
                     action_w = int(math.sqrt(self.code_seq_len))

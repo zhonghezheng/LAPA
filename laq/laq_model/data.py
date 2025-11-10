@@ -52,19 +52,21 @@ class ImageVideoDataset(Dataset):
     def __getitem__(self, index):
         try :
             offset = self.offset
-            
+            index = random.randint(0, len(self.folder_list)-1)
             folder = self.folder_list[index]
             img_list = os.listdir(os.path.join(self.folder, folder))
-
             img_list = sorted(img_list)
             ## pick random frame 
-            first_frame_idx = random.randint(0, len(img_list)-1)
-            first_frame_idx = min(first_frame_idx, len(img_list)-1)
-            second_frame_idx = min(first_frame_idx + offset, len(img_list)-1)
+            if offset == 1:
+                first_frame_idx = random.randint(0, len(img_list)-1)
+                first_frame_idx = min(first_frame_idx, len(img_list)-1)
+                second_frame_idx = min(first_frame_idx + offset, len(img_list)-1)
+            else:
+                first_frame_idx = 0
+                second_frame_idx = offset
             
             # first_path = os.path.join(self.folder, folder, img_list[first_frame_idx])
             # second_path = os.path.join(self.folder, folder, img_list[second_frame_idx])
-
             first_path = os.path.join(self.folder, folder, f"frame{first_frame_idx}.jpg")
             second_path = os.path.join(self.folder, folder, f"frame{second_frame_idx}.jpg")
                     
@@ -84,63 +86,64 @@ class ImageVideoDataset(Dataset):
                 return self.__getitem__(random.randint(0, self.__len__() - 1))
 
 
-class ImageVideoDatasetSubtask(Dataset):
-    def __init__(
-        self,
-        folder,
-        image_size,
-        offset=4,
-    ):
-        super().__init__()
+# class ImageVideoDatasetSubtask(Dataset):
+#     def __init__(
+#         self,
+#         folder,
+#         image_size,
+#         offset=4,
+#     ):
+#         super().__init__()
         
-        self.folder = folder
-        self.folder_list = os.listdir(folder)
-        self.image_size = image_size
+#         self.folder = folder
+#         self.folder_list = os.listdir(folder)
+#         self.image_size = image_size
       
-        self.offset = offset
+#         self.offset = offset
 
-        self.transform = T.Compose([
-            T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-            T.Resize(image_size),
-            T.ToTensor(),
-        ])
+#         self.transform = T.Compose([
+#             T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
+#             T.Resize(image_size),
+#             T.ToTensor(),
+#         ])
 
 
-    def __len__(self):
-        return len(self.folder_list) ## length of folder list is not exact number of frames; TODO: change this to actual number of frames
+#     def __len__(self):
+#         return len(self.folder_list) ## length of folder list is not exact number of frames; TODO: change this to actual number of frames
     
-    def __getitem__(self, index):
-        try :
-            offset = self.offset
+#     def __getitem__(self, index):
+#         try :
+#             index = random.randint(0, len(self.folder_list)-1)
+#             offset = self.offset
             
-            folder = self.folder_list[index]
-            img_list = os.listdir(os.path.join(self.folder, folder))
+#             folder = self.folder_list[index]
+#             img_list = os.listdir(os.path.join(self.folder, folder))
 
-            ## pick random frame 
-            first_frame_idx = random.choice([0,4,16])
-            # first_frame_idx = min(first_frame_idx, len(img_list)-1)
-            second_frame_idx = min(first_frame_idx + offset, len(img_list)-1)
+#             ## pick random frame 
+#             first_frame_idx = random.choice([0,4,16])
+#             # first_frame_idx = min(first_frame_idx, len(img_list)-1)
+#             second_frame_idx = min(first_frame_idx + offset, len(img_list)-1)
             
-            first_path = os.path.join(self.folder, folder, f"frame{first_frame_idx}.jpg")
-            second_path = os.path.join(self.folder, folder, f"frame{second_frame_idx}.jpg")
+#             first_path = os.path.join(self.folder, folder, f"frame{first_frame_idx}.jpg")
+#             second_path = os.path.join(self.folder, folder, f"frame{second_frame_idx}.jpg")
                     
-            img = Image.open(first_path)
-            next_img = Image.open(second_path)
+#             img = Image.open(first_path)
+#             next_img = Image.open(second_path)
 
-            transform_img = self.transform(img).unsqueeze(1)
-            next_transform_img = self.transform(next_img).unsqueeze(1)
+#             transform_img = self.transform(img).unsqueeze(1)
+#             next_transform_img = self.transform(next_img).unsqueeze(1)
             
-            cat_img = torch.cat([transform_img, next_transform_img], dim=1)
-            return cat_img
-        except :
-            print("error", index)
-            # if index < self.__len__() - 1:
-            #     return self.__getitem__(index + 1)
-            # else:
-            #     return self.__getitem__(random.randint(0, self.__len__() - 1))
+#             cat_img = torch.cat([transform_img, next_transform_img], dim=1)
+#             return cat_img
+#         except :
+#             print("error", index)
+#             # if index < self.__len__() - 1:
+#             #     return self.__getitem__(index + 1)
+#             # else:
+#             #     return self.__getitem__(random.randint(0, self.__len__() - 1))
             
 
-class ImageVideoDatasetSubtaskLong(Dataset):
+class ImageVideoDatasetColor(Dataset):
     def __init__(
         self,
         folder,
@@ -163,29 +166,26 @@ class ImageVideoDatasetSubtaskLong(Dataset):
 
 
     def __len__(self):
-        return len(self.folder_list) ## length of folder list is not exact number of frames; TODO: change this to actual number of frames
+        return len(self.folder_list)*2 ## length of folder list is not exact number of frames; TODO: change this to actual number of frames
     
     def __getitem__(self, index):
         try :
-            offset = self.offset
-            
+            index = random.randint(0, len(self.folder_list)-1)            
             folder = self.folder_list[index]
-            img_list = os.listdir(os.path.join(self.folder, folder))            
 
-            img_list = []
+            first_frame_idx = 0
+            second_frame_idx = 1
+            
+            first_path = os.path.join(self.folder, folder, f"frame{first_frame_idx}.jpg")
+            second_path = os.path.join(self.folder, folder, f"frame{second_frame_idx}.jpg")
+                    
+            img = Image.open(first_path)
+            next_img = Image.open(second_path)
 
-            for i in range(0, 21, 4):
-                img_path = os.path.join(self.folder, folder, f"frame{i}.jpg")
-                img = Image.open(img_path)
-                transform_img = self.transform(img).unsqueeze(1)
-                img_list.append(transform_img)
-                
-            cat_img = torch.cat([img for img in img_list], dim=1)
-            print(cat_img.shape)
+            transform_img = self.transform(img).unsqueeze(1)
+            next_transform_img = self.transform(next_img).unsqueeze(1)
+            
+            cat_img = torch.cat([transform_img, next_transform_img], dim=1)
             return cat_img
         except :
             print("error", index)
-            if index < self.__len__() - 1:
-                return self.__getitem__(index + 1)
-            else:
-                return self.__getitem__(random.randint(0, self.__len__() - 1))
